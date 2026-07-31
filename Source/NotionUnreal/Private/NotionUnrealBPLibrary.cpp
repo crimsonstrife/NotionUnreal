@@ -33,7 +33,7 @@ UNotionUnrealBPLibrary::UNotionUnrealBPLibrary(const FObjectInitializer& ObjectI
 }
 
 
-void UNotionUnrealBPLibrary::CreateTaskInNotion(const FString Properties, const FString ContentChildren, const FResponse &OnComplete)
+void UNotionUnrealBPLibrary::CreateTaskInNotion(const FString Properties, const FString ContentChildren, const FNotionResponse &OnComplete)
 {
     const UNotionSettings* NotionSettings = GetDefault<UNotionSettings>();
 
