@@ -14,7 +14,8 @@ class NOTIONUNREAL_API UNotionKeyCommands
 public:
 
 	bool IsBindableKey(const FKey& Key);
-	void UpdatePlayerInput(UPlayerInput* PlayerInput, const FKeyBind& KeyBind);
+	/** Merges KeyBind into PlayerInput->DebugExecBindings (keyed by command). Returns true if the array changed. */
+	bool UpdatePlayerInput(UPlayerInput* PlayerInput, const FKeyBind& KeyBind);
 	FKeyBind CreateUnrealKeyBinding(const FNotionKeyInfo& KeyInfo, const FString& Command);
 	void SetKeyToCommand(const FNotionKeyInfo& KeyInfo, const TCHAR* CommandName);
 };

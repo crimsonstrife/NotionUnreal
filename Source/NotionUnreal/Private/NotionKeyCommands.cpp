@@ -10,7 +10,26 @@ bool UNotionKeyCommands::IsBindableKey(const FKey& Key)
 }
 
 
-void UNotionKeyCommands::UpdatePlayerInput(UPlayerInput* PlayerInputRef, const FKeyBind& NewKeyBind)
+namespace
+{
+    // FKeyBind has no operator==, so compare the fields Notion actually manages.
+    bool KeyBindsMatch(const FKeyBind& A, const FKeyBind& B)
+    {
+        return A.Key == B.Key
+            && A.Command.Equals(B.Command, ESearchCase::IgnoreCase)
+            && A.Control == B.Control
+            && A.Shift == B.Shift
+            && A.Alt == B.Alt
+            && A.Cmd == B.Cmd
+            && A.bIgnoreCtrl == B.bIgnoreCtrl
+            && A.bIgnoreShift == B.bIgnoreShift
+            && A.bIgnoreAlt == B.bIgnoreAlt
+            && A.bIgnoreCmd == B.bIgnoreCmd;
+    }
+}
+
+
+bool UNotionKeyCommands::UpdatePlayerInput(UPlayerInput* PlayerInputRef, const FKeyBind& NewKeyBind)
 {
     const int32 Index = PlayerInputRef->DebugExecBindings.IndexOfByPredicate([&](const FKeyBind& PlayerKeyBind)
         {
@@ -21,19 +40,27 @@ void UNotionKeyCommands::UpdatePlayerInput(UPlayerInput* PlayerInputRef, const F
     {
         if (Index != INDEX_NONE)
         {
+            // Already bound identically -> nothing to change.
+            if (KeyBindsMatch(PlayerInputRef->DebugExecBindings[Index], NewKeyBind))
+            {
+                return false;
+            }
             PlayerInputRef->DebugExecBindings[Index] = NewKeyBind;
         }
         else
         {
             PlayerInputRef->DebugExecBindings.Add(NewKeyBind);
         }
+        return true;
     }
     else
     {
         if (Index != INDEX_NONE)
         {
             PlayerInputRef->DebugExecBindings.RemoveAt(Index);
+            return true;
         }
+        return false;
     }
 }
 
@@ -74,16 +101,25 @@ void UNotionKeyCommands::SetKeyToCommand(const FNotionKeyInfo& KeyInfo, const TC
     checkf(!Command.IsEmpty(), TEXT("Command is empty."));
 
     const FKeyBind KeyBind = CreateUnrealKeyBinding(KeyInfo, Command);
-    //UPlayerInput* CopyPlayerInput = &(*GetMutableDefault<UPlayerInput>());
 
-    if (UPlayerInput* CopyOfPlayerInput = &(*GetMutableDefault<UPlayerInput>()))
+    if (UPlayerInput* CopyOfPlayerInput = GetMutableDefault<UPlayerInput>())
     {
-        CopyOfPlayerInput->DebugExecBindings.Empty();
-        CopyOfPlayerInput->DebugExecBindings.Add(KeyBind);
-        CopyOfPlayerInput->InvertedAxis.Empty();
-        CopyOfPlayerInput->InvertedAxis.Add(FName("NAME_None"));
+        // Merge only Notion's binding (keyed by command) rather than clobbering the
+        // whole array, so any other DebugExecBindings (and InvertedAxis entries) survive.
+        const bool bChanged = UpdatePlayerInput(CopyOfPlayerInput, KeyBind);
 
-        CopyOfPlayerInput->SaveConfig(CPF_Config, *GetMutableDefault<UPlayerInput>()->GetDefaultConfigFilename());
+        // Only touch DefaultInput.ini when the binding actually changed, to avoid
+        // needless rewrites / VCS churn on every editor start.
+        if (bChanged)
+        {
+            // NOTE: Do NOT use SaveConfig(CPF_Config, GetDefaultConfigFilename()) here.
+            // That writes a file containing only the UPlayerInput section, wiping every
+            // other section that shares Config/DefaultInput.ini (EnhancedInputDeveloperSettings'
+            // bEnableUserSettings, EnhancedInputEditorProjectSettings' DefaultEditorInputClass /
+            // DefaultMappingContexts, etc.). TryUpdateDefaultConfigFile() merges ONLY this
+            // object's section (via FConfigFile::UpdateSections), preserving the rest.
+            CopyOfPlayerInput->TryUpdateDefaultConfigFile();
+        }
     }
 
 }
